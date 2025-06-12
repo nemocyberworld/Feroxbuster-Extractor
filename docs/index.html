@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Status Code Grouper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-gray-100 p-6">
+  <div class="max-w-4xl mx-auto bg-white p-6 rounded-xl shadow">
+    <h1 class="text-2xl font-bold mb-4" style="color: blue; text-align: center;">Ferox Buster Extractor</h1>
+<h2 class="text-2xl font-bold mb-4">HTTP Status Code Grouper</h2>
+    <textarea
+      id="inputText"
+      rows="12"
+      class="w-full p-3 border rounded mb-4 font-mono text-sm"
+      placeholder="Paste your raw response logs here..."
+    ></textarea>
+
+    <button
+      onclick="groupByStatus()"
+      class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded mb-4"
+    >
+      Group Responses
+    </button>
+
+    <div class="flex gap-2 mb-4">
+      <input
+        type="file"
+        id="fileInput"
+        accept=".xlsx"
+        class="block border rounded p-1"
+      />
+      <button
+        onclick="importXLSX()"
+        class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+      >
+        Import XLSX
+      </button>
+      <button
+        onclick="exportXLSX()"
+        class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded"
+      >
+        Export XLSX
+      </button>
+    </div>
+
+    <div
+      id="output"
+      class="space-y-6 text-sm font-mono whitespace-pre-wrap"
+    ></div>
+  </div>
+
+  <script>
+    // Group and display status responses from textarea input
+    function groupByStatus() {
+      const raw = document.getElementById("inputText").value;
+      const lines = raw.split("\n");
+      const statusGroups = {};
+
+      lines.forEach((line) => {
+        // Support multiple HTTP methods, case-insensitive
+        const match = line.match(/^(\d{3})\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)\s+.*$/i);
+        if (match) {
+          const code = match[1];
+          if (!statusGroups[code]) statusGroups[code] = [];
+          statusGroups[code].push(line);
+        }
+      });
+
+      const outputDiv = document.getElementById("output");
+      outputDiv.innerHTML = "";
+
+      Object.keys(statusGroups)
+        .sort()
+        .forEach((code) => {
+          const section = document.createElement("div");
+          section.innerHTML =
+            `<div class="font-bold text-blue-700 mb-1">### Status ${code} Responses (${statusGroups[code].length}) ###</div>` +
+            statusGroups[code]
+              .map((line) => `<div>${line}</div>`)
+              .join("");
+          outputDiv.appendChild(section);
+        });
+
+      if (Object.keys(statusGroups).length === 0) {
+        outputDiv.innerHTML =
+          `<div class="text-red-600">No matching response lines found.</div>`;
+      }
+    }
+
+    // Import XLSX file and populate textarea with lines
+    function importXLSX() {
+      const file = document.getElementById("fileInput").files[0];
+      if (!file) return alert("Please select an XLSX file first.");
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+        // Join all cells in rows as space-separated strings, then join rows by newline
+        const lines = json.map((row) => row.join(" ")).join("\n");
+        document.getElementById("inputText").value = lines;
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // Export grouped status code responses to XLSX file
+    function exportXLSX() {
+      const raw = document.getElementById("inputText").value;
+      const lines = raw.split("\n");
+      const statusGroups = {};
+
+      lines.forEach((line) => {
+        const match = line.match(/^(\d{3})\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)\s+.*$/i);
+        if (match) {
+          const code = match[1];
+          if (!statusGroups[code]) statusGroups[code] = [];
+          statusGroups[code].push([code, match[2], line]);
+        }
+      });
+
+      const sheetData = [["Status", "Method", "Full Line"]];
+      Object.keys(statusGroups)
+        .sort()
+        .forEach((code) => {
+          sheetData.push(["", "", `### Status ${code} (${statusGroups[code].length}) ###`]);
+          sheetData.push(...statusGroups[code]);
+        });
+
+      const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Grouped Statuses");
+
+      XLSX.writeFile(workbook, "grouped_status_codes.xlsx");
+    }
+  </script>
+</body>
+</html>
